@@ -108,6 +108,7 @@ class ChatUI(App[None]):
         super().__init__()
         self.model: Llama | None = None
         self.history: List[Tuple[str, str]] = []
+        self.chat_lines: List[str] = []
         self.is_generating = False
 
     def compose(self) -> ComposeResult:
@@ -132,13 +133,13 @@ class ChatUI(App[None]):
 
     def action_clear_chat(self) -> None:
         self.history.clear()
-        self.query_one("#chat-box", Static).update("[dim]Conversation cleared.[/dim]")
+        self.chat_lines = ["[dim]Conversation cleared.[/dim]"]
+        self.query_one("#chat-box", Static).update(self.chat_lines[0])
 
     def _write_chat(self, text: str) -> None:
         chat_box = self.query_one("#chat-box", Static)
-        previous = chat_box.renderable
-        content = f"{previous}\n\n{text}" if previous else text
-        chat_box.update(content)
+        self.chat_lines.append(text)
+        chat_box.update("\n\n".join(self.chat_lines))
         chat_box.scroll_end(animate=False)
 
     def _set_status(self, state: str) -> None:
