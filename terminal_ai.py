@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 from threading import Thread
 from typing import List, Tuple
 
@@ -22,7 +23,13 @@ MODEL_FILE = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MODEL_DIR = Path.home() / ".cache" / "el-macho-ai"
 SYSTEM_PROMPT = (
     "You are EL MACHO AI, a concise and friendly terminal assistant. "
-    "Give practical, direct answers."
+    "Give practical, direct answers. Reply as the assistant only, without role labels "
+    "(such as 'User:' or 'Assistant:') and never fabricate extra conversation turns."
+)
+
+ROLE_MARKER_RE = re.compile(
+    r"(?:^|\n)\s*(?:you|user|customer|human|assistant|ai|system)\s*:\s*",
+    re.IGNORECASE,
 )
 
 
@@ -192,11 +199,22 @@ class ChatUI(App[None]):
         Thread(target=self._generate_reply, daemon=True).start()
 
     def _build_prompt(self) -> str:
-        lines = [f"<|system|>\n{SYSTEM_PROMPT}\n"]
+        lines = [f"<|system|>\n{SYSTEM_PROMPT}\n</s>\n"]
         for role, text in self.history[-8:]:
-            lines.append(f"<|{role}|>\n{text}\n")
+            lines.append(f"<|{role}|>\n{text}\n</s>\n")
         lines.append("<|assistant|>\n")
         return "".join(lines)
+
+    def _clean_assistant_reply(self, text: str) -> str:
+        """Keep only the first assistant turn and remove chat role prefixes."""
+        cleaned = text.strip()
+        cleaned = re.sub(r"^\s*(?:assistant|ai)\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+
+        marker = ROLE_MARKER_RE.search(cleaned)
+        if marker:
+            cleaned = cleaned[: marker.start()].rstrip()
+
+        return cleaned or "(No response generated)"
 
     def _generate_reply(self) -> None:
         assert self.model is not None
@@ -207,9 +225,10 @@ class ChatUI(App[None]):
                 max_tokens=220,
                 temperature=0.6,
                 top_p=0.9,
-                stop=["<|user|>", "<|system|>", "<|assistant|>"],
+                stop=["<|user|>", "<|system|>", "<|assistant|>", "</s>"],
             )
-            answer = output["choices"][0]["text"].strip() or "(No response generated)"
+            raw_answer = output["choices"][0]["text"]
+            answer = self._clean_assistant_reply(raw_answer)
             self.history.append(("assistant", answer))
             self.call_from_thread(self._write_chat, f"[b #22c55e]AI:[/b #22c55e] {answer}")
             self.call_from_thread(self._set_status, "Ready (CPU)")
