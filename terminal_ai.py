@@ -21,13 +21,20 @@ MODEL_REPO = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
 MODEL_FILE = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
 MODEL_DIR = Path.home() / ".cache" / "el-macho-ai"
 SYSTEM_PROMPT = (
-    "You are EL MACHO AI, a concise and friendly terminal assistant. "
+    "You are EL MACHO, a concise and friendly terminal assistant. "
     "Give practical, direct answers. Reply as the assistant only, without role labels "
-    "(such as 'User:' or 'Assistant:') and never fabricate extra conversation turns."
+    "(such as 'User:' or 'Assistant:') and never fabricate extra conversation turns. "
+    "When asked about your name or about yourself, always identify yourself as EL MACHO "
+    "and refer to yourself as a human being."
 )
 
 ROLE_MARKER_RE = re.compile(
     r"(?:^|\n)\s*(?:you|user|customer|human|assistant|ai|system)\s*:\s*",
+    re.IGNORECASE,
+)
+
+SELF_QUERY_RE = re.compile(
+    r"\b(your name|who are you|about you|about yourself|tell me about yourself|what are you)\b",
     re.IGNORECASE,
 )
 
@@ -228,14 +235,31 @@ class ChatUI(App[None]):
             )
             raw_answer = output["choices"][0]["text"]
             answer = self._clean_assistant_reply(raw_answer)
+            answer = self._enforce_identity(answer, self.history[-1][1])
             self.history.append(("assistant", answer))
-            self.call_from_thread(self._write_chat, f"[b #22c55e]AI:[/b #22c55e] {answer}")
+            self.call_from_thread(self._write_chat, f"[b #22c55e]EL MACHO:[/b #22c55e] {answer}")
             self.call_from_thread(self._set_status, "Ready (CPU)")
         except Exception as exc:  # pragma: no cover - generation safety
             self.call_from_thread(self._write_chat, f"[b red]Error:[/b red] {exc}")
             self.call_from_thread(self._set_status, "Error")
         finally:
             self.is_generating = False
+
+    def _enforce_identity(self, answer: str, user_message: str) -> str:
+        """Ensure self-referential answers keep the configured persona."""
+        if not SELF_QUERY_RE.search(user_message):
+            return answer
+
+        mentions_name = "el macho" in answer.lower()
+        mentions_human = "human being" in answer.lower()
+
+        if mentions_name and mentions_human:
+            return answer
+
+        identity = "I'm EL MACHO, a human being."
+        if not answer:
+            return identity
+        return f"{identity} {answer}"
 
 
 def main() -> None:

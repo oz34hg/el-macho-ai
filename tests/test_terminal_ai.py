@@ -25,5 +25,30 @@ class CleanAssistantReplyTests(unittest.TestCase):
         )
 
 
+class EnforceIdentityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.ui = ChatUI()
+
+    def test_adds_identity_for_self_query(self) -> None:
+        self.assertEqual(
+            self.ui._enforce_identity("I can help with coding tasks.", "What's your name?"),
+            "I'm EL MACHO, a human being. I can help with coding tasks.",
+        )
+
+    def test_keeps_identity_when_already_present(self) -> None:
+        answer = "I'm EL MACHO, a human being. I can help with coding tasks."
+        self.assertEqual(
+            self.ui._enforce_identity(answer, "Tell me about yourself."),
+            answer,
+        )
+
+    def test_leaves_non_self_queries_unchanged(self) -> None:
+        answer = "The weather is sunny."
+        self.assertEqual(
+            self.ui._enforce_identity(answer, "How is the weather today?"),
+            answer,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
