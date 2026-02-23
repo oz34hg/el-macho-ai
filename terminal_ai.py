@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""CPU-only terminal chat assistant with an automatic model download on first run."""
 
 from __future__ import annotations
 
